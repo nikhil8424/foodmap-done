@@ -4,74 +4,95 @@ let socket = null;
 
 export function getSocket() {
   if (!socket) {
-    // Connect to current origin
-    socket = io(window.location.origin, {
-      reconnectionAttempts: 5,
+    const socketUrl =
+      import.meta.env.VITE_SOCKET_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+
+    socket = io(socketUrl, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      autoConnect: true
     });
 
     socket.on('connect', () => {
-      console.log('[Socket.IO] Connected to real-time server with ID:', socket.id);
-    });
-
-    socket.on('connect_error', (err) => {
-      console.warn('[Socket.IO] Connection error:', err.message);
+      console.log('[Socket.IO Frontend] Connected:', socket.id);
     });
   }
   return socket;
 }
 
-export function onFoodAvailabilityUpdated(callback) {
+export function subscribeToVendor(vendorId) {
   const s = getSocket();
-  s.on('food:availabilityUpdated', callback);
-  return () => s.off('food:availabilityUpdated', callback);
+  s.emit('vendor:join', vendorId);
 }
 
-export function onFoodNewPosted(callback) {
+export function subscribeToUser(userId) {
   const s = getSocket();
-  s.on('food:newPosted', callback);
-  return () => s.off('food:newPosted', callback);
+  s.emit('user:join', userId);
 }
 
-export function onFoodUpdated(callback) {
+export function subscribeToOrder(orderId) {
   const s = getSocket();
-  s.on('food:updated', callback);
-  return () => s.off('food:updated', callback);
+  s.emit('order:subscribe', orderId);
 }
 
-export function onFoodDeleted(callback) {
+export function subscribeToFood(foodId) {
   const s = getSocket();
-  s.on('food:deleted', callback);
-  return () => s.off('food:deleted', callback);
+  s.emit('food:subscribe', foodId);
 }
 
-export function onNewIncomingOrder(callback) {
+// Real-time Event Subscription Helpers
+export function onFoodAvailabilityUpdated(cb) {
   const s = getSocket();
-  s.on('order:newIncoming', callback);
-  return () => s.off('order:newIncoming', callback);
+  const handler = (data) => cb(data);
+  s.on('food:availabilityUpdated', handler);
+  return () => s.off('food:availabilityUpdated', handler);
 }
 
-export function onOrderStatusChanged(callback) {
+export function onFoodNewPosted(cb) {
   const s = getSocket();
-  s.on('order:statusChanged', callback);
-  return () => s.off('order:statusChanged', callback);
+  const handler = (data) => cb(data);
+  s.on('food:created', handler);
+  return () => s.off('food:created', handler);
 }
 
-export function onVendorUpdated(callback) {
+export function onFoodUpdated(cb) {
   const s = getSocket();
-  s.on('radar:vendorUpdated', callback);
-  return () => s.off('radar:vendorUpdated', callback);
+  const handler = (data) => cb(data);
+  s.on('food:updated', handler);
+  return () => s.off('food:updated', handler);
 }
 
-export function joinVendorRoom(vendorId) {
-  if (!vendorId) return;
+export function onFoodDeleted(cb) {
   const s = getSocket();
-  s.emit('join:vendor', vendorId);
+  const handler = (data) => cb(data);
+  s.on('food:deleted', handler);
+  return () => s.off('food:deleted', handler);
 }
 
-export function joinUserRoom(userId) {
-  if (!userId) return;
+export function onVendorUpdated(cb) {
   const s = getSocket();
-  s.emit('join:user', userId);
+  const handler = (data) => cb(data);
+  s.on('vendor:statusUpdated', handler);
+  return () => s.off('vendor:statusUpdated', handler);
 }
+
+export function onOrderStatusUpdated(cb) {
+  const s = getSocket();
+  const handler = (data) => cb(data);
+  s.on('order:statusUpdated', handler);
+  return () => s.off('order:statusUpdated', handler);
+}
+
+export const onOrderStatusChanged = onOrderStatusUpdated;
+
+export function onOrderCreated(cb) {
+  const s = getSocket();
+  const handler = (data) => cb(data);
+  s.on('order:created', handler);
+  return () => s.off('order:created', handler);
+}
+
+export const onNewIncomingOrder = onOrderCreated;
+
+export default getSocket;

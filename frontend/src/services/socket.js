@@ -15,11 +15,7 @@ export function getSocket() {
     });
 
     socket.on('connect', () => {
-      console.log('[Socket.IO Frontend] Connected successfully:', socket.id);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('[Socket.IO Frontend] Disconnected');
+      console.log('[Socket.IO Frontend] Connected:', socket.id);
     });
   }
   return socket;
@@ -88,11 +84,15 @@ export function onOrderStatusUpdated(cb) {
   return () => s.off('order:statusUpdated', handler);
 }
 
+export const onOrderStatusChanged = onOrderStatusUpdated;
+
 export function onOrderCreated(cb) {
   const s = getSocket();
   const handler = (data) => cb(data);
   s.on('order:created', handler);
   return () => s.off('order:created', handler);
 }
+
+export const onNewIncomingOrder = onOrderCreated;
 
 export default getSocket;

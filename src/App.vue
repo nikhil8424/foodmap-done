@@ -1,7 +1,12 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useAuthStore } from './stores/authStore.js'
+import { useFoodStore } from './stores/foodStore.js'
+import { useOrderStore } from './stores/orderStore.js'
+import { useVendorStore } from './stores/vendorStore.js'
+import { getSocket } from './services/socket.js'
 
-// Import all FoodMap cards/screens
+// Import all FoodMap screen components
 import Welcome_to_FoodMap from './components/Welcome_to_FoodMap.vue'
 import FoodRadar from './components/FoodRadar.vue'
 import FoodDetails from './components/FoodDetails.vue'
@@ -20,6 +25,11 @@ import VendorProfile from './components/VendorProfile.vue'
 import EditVendorProfile from './components/EditVendorProfile.vue'
 import RoleSelection from './components/RoleSelection.vue'
 import OTPVerification from './components/OTPVerification.vue'
+
+const authStore = useAuthStore()
+const foodStore = useFoodStore()
+const orderStore = useOrderStore()
+const vendorStore = useVendorStore()
 
 // Screens registry
 const screenComponents = {
@@ -40,45 +50,21 @@ const screenComponents = {
   vendor_profile: VendorProfile,
   edit_vendor_profile: EditVendorProfile,
   role_selection: RoleSelection,
-  otp_verification: OTPVerification
+  otp_verification: OTPVerification,
 }
 
-// Global App State
+// Navigation state
 const currentScreenId = ref('welcome')
 const navigationHistory = ref(['welcome'])
-const currentRole = ref('resident') // 'resident' | 'vendor'
-const currentUser = ref({
-  name: 'Nikhil',
-  phone: '+91 98765 43210',
-  location: 'Bhandup West, Mumbai',
-  role: 'resident'
+
+const currentScreen = computed(() => {
+  return screenComponents[currentScreenId.value] || Welcome_to_FoodMap
 })
 
-const selectedFood = ref({
-  id: 'rajma-chawal',
-  name: 'Authentic Rajma Chawal',
-  vendorName: "Anjali's Kitchen",
-  price: 80,
-  portions: 6,
-  time: 'Ready Now',
-  distance: '420m away',
-  rating: 4.8,
-  image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCcCn3i8k4gYk-jLV5MXuqSONW-8QpGOpQ4yYcs-5HUarOFUR1kCq3boeWmwl-f7Seo8MV5gGPaYolyo8w_lFVLtdBGN11e9huwwnLqF4wUGtqAbHcuebFi79m5evx_bXkagJMfR6xqZSl0A3UhdKsMtGL_SyAxPz6EhwbTtY7oWANHjY08Msx9WdC5GF0cpXi4h-eS9GA4sfMmh7CCZv7Lu_elTf3lY2oNae4dUF5Fxdr0ktu3Ed5C'
-})
-
-const currentOrder = ref({
-  id: '#FM1024',
-  item: 'Rajma Chawal',
-  vendor: "Anjali's Kitchen",
-  qty: 2,
-  pricePerPortion: 80,
-  deliveryFee: 30,
-  platformFee: 5,
-  total: 195,
-  status: 'Preparing',
-  pickupLocation: 'Building B, Apt 402, Bhandup West',
-  time: '12:45 PM'
-})
+const currentUser = computed(() => authStore.user)
+const currentRole = computed(() => authStore.currentRole)
+const selectedFood = computed(() => foodStore.selectedFood || foodStore.foods[0])
+const currentOrder = computed(() => orderStore.currentOrder)
 
 const toastMessage = ref('')
 const isToastVisible = ref(false)
@@ -95,38 +81,45 @@ function showToast(msg) {
 
 function navigateTo(target, payload = null) {
   if (!target) return
-  
-  // Normalise target name
   let targetId = target
-  if (target === 'home' || target === 'explore') {
+
+  if (targetId.startsWith('applet:')) {
+    targetId = targetId.replace('applet:', '')
+  }
+
+  // Handle aliases & actions
+  if (targetId === 'home' || targetId === 'explore' || targetId === 'food_radar') {
     targetId = currentRole.value === 'vendor' ? 'vendor_dashboard' : 'food_radar'
-  } else if (target === 'orders' || target === 'my_orders') {
+  } else if (targetId === 'dashboard' || targetId === 'vendor_home' || targetId === 'listings') {
+    targetId = 'vendor_dashboard'
+  } else if (targetId === 'post_food') {
+    targetId = 'post_new_food'
+  } else if (targetId === 'orders' || targetId === 'my_orders') {
     targetId = currentRole.value === 'vendor' ? 'vendor_order_confirmed' : 'order_status'
-  } else if (target === 'profile') {
-    targetId = currentRole.value === 'vendor' ? 'vendor_profile' : 'resident_profile'
-  } else if (target === 'dashboard' || target === 'vendor_home') {
-    targetId = 'vendor_dashboard'
-  } else if (target === 'listings') {
-    targetId = 'vendor_dashboard'
-  } else if (target === 'vendor-orders' || target === 'vendor_orders') {
+  } else if (targetId === 'vendor-orders' || targetId === 'vendor_orders') {
     targetId = 'vendor_order_confirmed'
-  } else if (target === 'back') {
+  } else if (targetId === 'profile') {
+    targetId = currentRole.value === 'vendor' ? 'vendor_profile' : 'resident_profile'
+  } else if (targetId === 'back') {
     goBack()
     return
   }
 
   if (payload) {
-    if (payload.food) selectedFood.value = { ...selectedFood.value, ...payload.food }
-    if (payload.order) currentOrder.value = { ...currentOrder.value, ...payload.order }
+    if (targetId === 'food_details' || payload.food || payload.price !== undefined) {
+      foodStore.selectFood(payload.food || payload)
+    }
+    if (payload.order || payload.orderNumber || payload.totalAmount || payload.item) {
+      orderStore.currentOrder = { ...orderStore.currentOrder, ...(payload.order || payload) }
+    }
     if (payload.role) {
-      currentRole.value = payload.role
-      currentUser.value.role = payload.role
+      authStore.setRole(payload.role)
     }
   }
 
   if (screenComponents[targetId]) {
-    navigationHistory.value.push(targetId)
     currentScreenId.value = targetId
+    navigationHistory.value.push(targetId)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 }
@@ -137,101 +130,117 @@ function goBack() {
     currentScreenId.value = navigationHistory.value[navigationHistory.value.length - 1]
     window.scrollTo({ top: 0, behavior: 'smooth' })
   } else {
-    // Default fallback
     currentScreenId.value = currentRole.value === 'vendor' ? 'vendor_dashboard' : 'food_radar'
   }
 }
 
 function handleAuthSuccess(authData) {
   if (authData?.role) {
-    currentRole.value = authData.role
-    currentUser.value.role = authData.role
+    authStore.setRole(authData.role)
   }
   if (authData?.phone) {
-    currentUser.value.phone = authData.phone
+    if (authStore.user) authStore.user.phone = authData.phone
   }
-  
-  if (currentRole.value === 'vendor') {
+
+  if (authStore.currentRole === 'vendor') {
     navigateTo('vendor_dashboard')
   } else {
     navigateTo('food_radar')
   }
-  showToast(`Welcome ${currentUser.value.name}! Connected in ${currentRole.value} mode.`)
+  showToast(`Welcome! Logged in as ${authStore.currentRole === 'vendor' ? 'Kitchen Vendor' : 'Resident'}.`)
 }
 
-function handleRoleSwitch(newRole) {
-  currentRole.value = newRole
-  currentUser.value.role = newRole
-  if (newRole === 'vendor') {
+function handleExploreGuest() {
+  authStore.setRole('resident')
+  navigateTo('food_radar')
+  showToast('Welcome to FoodMap! Exploring nearby home cooks.')
+}
+
+function handleRoleSwitch(role) {
+  authStore.setRole(role)
+  showToast(`Switched to ${role === 'vendor' ? 'Vendor Mode (Kitchen)' : 'Resident Mode (Discovery)'}`)
+  if (role === 'vendor') {
     navigateTo('vendor_dashboard')
-    showToast('Switched to Vendor Mode (Cook & Sell)')
   } else {
     navigateTo('food_radar')
-    showToast('Switched to Resident Mode (Explore & Eat)')
   }
 }
 
 function handleAction(event) {
-  const action = event?.action || event
-  const payload = event?.payload || null
+  if (!event) return
+  const action = event.action || event
+  const payload = event.payload || null
 
   if (action === 'toast') {
-    showToast(payload?.message || 'Action completed')
-  } else if (action === 'switch-role') {
+    showToast(payload?.message || 'Updated successfully')
+  } else if (action === 'set-role' || action === 'switch-role') {
     handleRoleSwitch(payload?.role || (currentRole.value === 'resident' ? 'vendor' : 'resident'))
+  } else if (action === 'create-order') {
+    orderStore.placeOrder(payload)
+    showToast('Order placed! Notifying kitchen...')
+  } else if (action === 'update-order-status') {
+    orderStore.updateStatus(payload?.id || orderStore.currentOrder?._id, payload?.status)
+    showToast(`Order status updated to ${payload?.status}`)
+  } else if (action === 'post-food') {
+    foodStore.addFood(payload)
+    showToast('Food is now LIVE on FoodMap radar!')
   } else if (action === 'call-vendor' || action === 'call') {
-    showToast('Connecting call to Anjali (+91 98201 12345)...')
+    showToast('Connecting call to Anjali (+91 98201 45892)...')
   } else if (action === 'share') {
-    showToast('Listing link copied to clipboard!')
+    showToast('Dish link copied to clipboard!')
   } else if (action === 'save' || action === 'favorite') {
-    showToast('Added to your favorite neighborhood kitchens!')
+    showToast('Saved to your favorite neighborhood kitchens!')
   }
 }
 
-const activeComponent = computed(() => {
-  return screenComponents[currentScreenId.value] || Welcome_to_FoodMap
+onMounted(async () => {
+  try {
+    getSocket()
+    foodStore.fetchFoods()
+    orderStore.fetchOrders()
+    vendorStore.fetchVendors()
+  } catch (e) {
+    console.warn('[App Init Warning]', e.message)
+  }
 })
 </script>
 
 <template>
-  <div class="app-root relative min-h-screen bg-background text-on-surface">
-    <!-- Toast Notification Banner -->
-    <Transition name="toast">
-      <div
-        v-if="isToastVisible"
-        class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-inverse-surface text-inverse-on-surface px-5 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-outline-variant/20 font-label-md text-sm backdrop-blur-md"
-      >
-        <span class="material-symbols-outlined text-primary text-[20px]">info</span>
-        <span>{{ toastMessage }}</span>
-      </div>
-    </Transition>
-
-    <!-- Main View Component Render -->
-    <main class="w-full">
+  <div id="foodmap-app" class="relative min-h-screen bg-background font-body antialiased selection:bg-primary/20 selection:text-primary">
+    <!-- Main Dynamic Screen -->
+    <main class="w-full min-h-screen">
       <component
-        :is="activeComponent"
+        :is="currentScreen"
+        :user="currentUser"
+        :current-role="currentRole"
         :food="selectedFood"
         :order="currentOrder"
-        :user="currentUser"
-        :currentRole="currentRole"
         @navigate="navigateTo"
         @action="handleAction"
-        @auth-success="handleAuthSuccess"
-        @explore-guest="handleAuthSuccess({ role: 'resident' })"
         @role-switch="handleRoleSwitch"
+        @auth-success="handleAuthSuccess"
+        @explore-guest="handleExploreGuest"
+        @role-selected="(role) => authStore.setRole(role)"
       />
     </main>
+
+    <!-- Real-time Toast Notifications -->
+    <transition
+      enter-active-class="transform ease-out duration-300 transition"
+      enter-from-class="translate-y-4 opacity-0 scale-95"
+      enter-to-class="translate-y-0 opacity-100 scale-100"
+      leave-active-class="transition ease-in duration-200"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div
+        v-if="isToastVisible"
+        id="toast-notification"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2.5 px-4 py-3 bg-inverse-surface text-inverse-on-surface rounded-2xl shadow-2xl border border-white/10 text-xs font-semibold max-w-sm w-full mx-4 backdrop-blur-md"
+      >
+        <span class="material-symbols-outlined text-[20px] text-primary">info</span>
+        <span class="flex-1">{{ toastMessage }}</span>
+      </div>
+    </transition>
   </div>
 </template>
-
-<style>
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -20px);
-}
-</style>

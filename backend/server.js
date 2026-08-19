@@ -5,6 +5,17 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
+import dns from 'node:dns';
+
+// Fix DNS resolution for MongoDB Atlas SRV on local / Windows environments
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+  if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+} catch (e) {
+  // Ignored
+}
 
 import { connectDB } from './config/database.js';
 import { seedInitialData } from './config/seed.js';
@@ -66,7 +77,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Frontend Vite Integration for seamless preview on port 3000
+// Frontend Vite Integration for unified port 3000 hosting
 const isProduction = process.env.NODE_ENV === 'production';
 
 async function setupFrontend() {
@@ -78,7 +89,7 @@ async function setupFrontend() {
     try {
       const { createServer: createViteServer } = await import('vite');
       const viteConfigFile = path.join(frontendDir, 'vite.config.js');
-      
+
       const vite = await createViteServer({
         root: frontendDir,
         configFile: fs.existsSync(viteConfigFile) ? viteConfigFile : false,
@@ -88,8 +99,13 @@ async function setupFrontend() {
 
       app.use(vite.middlewares);
 
-      app.use('*', async (req, res, next) => {
-        if (req.originalUrl.startsWith('/api') || req.originalUrl.startsWith('/socket.io')) {
+      // Express 5 compatible SPA fallback (no '*' regex pattern error)
+      app.use(async (req, res, next) => {
+        if (
+          req.method !== 'GET' ||
+          req.originalUrl.startsWith('/api') ||
+          req.originalUrl.startsWith('/socket.io')
+        ) {
           return next();
         }
         try {
@@ -107,16 +123,21 @@ async function setupFrontend() {
         }
       });
     } catch (e) {
-      console.warn('[Vite Integration Warning]', e.message);
+      console.warn('[Vite Integration Notice]', e.message);
     }
   } else {
     const distPath = fs.existsSync(path.join(frontendDir, 'dist'))
       ? path.join(frontendDir, 'dist')
       : path.join(rootDir, 'dist');
+
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
-      app.get('*', (req, res, next) => {
-        if (req.originalUrl.startsWith('/api') || req.originalUrl.startsWith('/socket.io')) {
+      app.use((req, res, next) => {
+        if (
+          req.method !== 'GET' ||
+          req.originalUrl.startsWith('/api') ||
+          req.originalUrl.startsWith('/socket.io')
+        ) {
           return next();
         }
         res.sendFile(path.join(distPath, 'index.html'));
