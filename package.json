@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "node backend/server.js",
     "build": "vite build",
     "lint": "vite build",
-    "start": "node server.js",
-    "preview": "node server.js"
+    "start": "node backend/server.js",
+    "preview": "node backend/server.js"
   },
   "dependencies": {
     "axios": "^1.19.0",
@@ -23,7 +23,9 @@
     "pinia": "^4.0.3",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
-    "vue": "^3.5.40"
+    "vue": "^3.5.40",
+    "vue-router": "^5.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.8",

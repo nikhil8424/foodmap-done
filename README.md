@@ -1,39 +1,54 @@
-# demo
+# FoodMap
 
-This template should help get you started developing with Vue 3 in Vite.
+Hyperlocal Food Discovery & Real-Time Neighbor Cook Network.
 
-## Recommended IDE Setup
+## Architecture
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
+```
+FoodMap/
+├── frontend/             # Vue 3, Vite, Tailwind CSS, Pinia, Vue Router, Socket.IO Client (Port 5000)
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── components/
+│   │   ├── router/
+│   │   ├── services/
+│   │   ├── stores/
+│   │   ├── views/
+│   │   ├── App.vue
+│   │   └── main.js
+│   ├── package.json
+│   ├── vite.config.js
+│   └── .env
+│
+├── backend/              # Node.js, Express, MongoDB Atlas, Socket.IO, JWT, Zod (Port 3000)
+│   ├── config/
+│   ├── controllers/
+│   ├── middleware/
+│   ├── models/
+│   ├── routes/
+│   ├── services/
+│   ├── sockets/
+│   ├── utils/
+│   ├── validations/
+│   ├── server.js
+│   ├── package.json
+│   └── .env
+│
+└── package.json
 ```
 
-### Compile and Hot-Reload for Development
+## Running the Application
 
-```sh
+### Full-Stack (Single Command)
+```bash
 npm run dev
 ```
 
-### Compile and Minify for Production
+### Or Separately:
+```bash
+# Backend (Port 3000)
+cd backend && npm run dev
 
-```sh
-npm run build
+# Frontend (Port 5000)
+cd frontend && npm run dev
 ```
-"# foodmap" 
